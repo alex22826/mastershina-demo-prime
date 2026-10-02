@@ -8,8 +8,7 @@
 
   /* ---------- шапка ---------- */
   var header = $('.header'), hero = $('.hero');
-  function onScroll() { header.classList.toggle('solid', scrollY > hero.offsetHeight - 120); }
-  addEventListener('scroll', onScroll, { passive: true }); onScroll();
+  header.classList.toggle('solid', scrollY > hero.offsetHeight - 120);
 
   var mnav = $('.mnav');
   function menu(on) { mnav.classList.toggle('open', on); mnav.setAttribute('aria-hidden', String(!on)); document.documentElement.classList.toggle('ms-lock', on); }
@@ -20,10 +19,18 @@
   /* ---------- курсор ---------- */
   if (finePointer) {
     var cur = $('.cursor'), cx = 0, cy = 0, tx = 0, ty = 0;
-    addEventListener('mousemove', function (e) { tx = e.clientX; ty = e.clientY; cur.classList.add('on'); });
+    var running = false;
+    function loop() {
+      cx += (tx - cx) * .2; cy += (ty - cy) * .2;
+      cur.style.transform = 'translate(' + cx + 'px,' + cy + 'px)';
+      if (Math.abs(tx - cx) + Math.abs(ty - cy) > .5) requestAnimationFrame(loop); else running = false;
+    }
+    addEventListener('mousemove', function (e) {
+      tx = e.clientX; ty = e.clientY; cur.classList.add('on');
+      if (!running) { running = true; requestAnimationFrame(loop); }
+    }, { passive: true });
     document.addEventListener('mouseleave', function () { cur.classList.remove('on'); });
     document.addEventListener('mouseover', function (e) { cur.classList.toggle('big', !!e.target.closest('a, button, select, input, label')); });
-    (function loop() { cx += (tx - cx) * .2; cy += (ty - cy) * .2; cur.style.transform = 'translate(' + cx + 'px,' + cy + 'px)'; requestAnimationFrame(loop); })();
   }
 
   /* ---------- поиск: общая выдача ---------- */
@@ -71,7 +78,7 @@
   });
 
   /* ---------- скролл-история ---------- */
-  var range = $('.range'), tire = $('.ptire'), panels = $$('.rpanel'), imgs = $$('.stage-img'), bar = $('.stage-bar'), num = $('[data-stage-num]');
+  var range = $('.range'), tire = $('.ptire'), panels = $$('.rpanel'), imgs = $$('.stage-img'), barFill = $('.stage-bar i'), num = $('[data-stage-num]');
   var active = 0;
   function setActive(i) {
     if (i === active) return; active = i;
@@ -80,15 +87,22 @@
     num.textContent = '0' + (i + 1);
   }
   function rangeScroll() {
-    var r = range.getBoundingClientRect(), total = r.height - innerHeight;
-    var p = Math.min(Math.max(-r.top / (total || 1), 0), 1);
-    tire.style.setProperty('--rot', (p * 900) + 'deg');
-    bar.style.setProperty('--p', p);
+    var r = range.getBoundingClientRect();
+    if (r.bottom < -200 || r.top > innerHeight + 200) return; // блок далеко — ничего не считаем
+    var total = r.height - innerHeight, p = Math.min(Math.max(-r.top / (total || 1), 0), 1);
     var mid = innerHeight * .55, best = 0, bestD = Infinity;
     panels.forEach(function (pn, k) { var b = pn.getBoundingClientRect(), d = Math.abs(b.top + b.height / 2 - mid); if (d < bestD) { bestD = d; best = k; } });
+    tire.style.transform = 'rotate(' + (p * 900) + 'deg)';
+    barFill.style.transform = 'scaleX(' + p + ')';
     setActive(best);
   }
-  addEventListener('scroll', rangeScroll, { passive: true }); rangeScroll();
+  var heroH = hero.offsetHeight, ticking = false;
+  addEventListener('resize', function () { heroH = hero.offsetHeight; });
+  addEventListener('scroll', function () {
+    if (ticking) return; ticking = true;
+    requestAnimationFrame(function () { ticking = false; header.classList.toggle('solid', scrollY > heroH - 120); rangeScroll(); });
+  }, { passive: true });
+  rangeScroll();
 
   /* ---------- каталог ---------- */
   var st = { cat: 'all', brands: [], diam: '', max: 4600000, sort: 'pop', q: '', view: 'grid', limit: 9 };
@@ -181,7 +195,7 @@
   function qvOpen(id) {
     var p = MS.byId(id); if (!p) return;
     var cat = D.categories.find(function (c) { return c.id === p.cat; });
-    $('.qv-body').innerHTML = '<div class="qv-media"><img src="' + MS.img(p) + '" alt="' + p.name + '"></div>' +
+    $('.qv-body').innerHTML = '<div class="qv-media"><div class="qv-float"><img src="' + MS.img(p) + '" alt="' + p.name + '"></div></div>' +
       '<div class="qv-info"><span class="pc-brand">' + p.brand + ' · ' + cat.title + '</span><h3>' + p.name + '</h3><p>' + p.desc + '.</p>' +
       '<dl class="qv-specs"><dt>Размер</dt><dd>' + p.size + '</dd><dt>Назначение</dt><dd>' + p.axle + '</dd>' + (p.diam ? '<dt>Диаметр</dt><dd>' + p.diam + '</dd>' : '') +
       '<dt>Рейтинг</dt><dd>★ ' + p.rating.toFixed(1).replace('.', ',') + ' · ' + p.reviews + ' отзывов</dd><dt>Наличие</dt><dd style="color:#12a86b">' + p.stock + ' шт на складе</dd></dl>' +
